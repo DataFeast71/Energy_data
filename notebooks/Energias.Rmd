@@ -1,0 +1,302 @@
+---
+title: |
+  [1]: https://www.facebook.com/An%C3%A1lisis-y-visualizaci%C3%B3n-de-datos-100602148375744
+  [2]: https://raw.githubusercontent.com/DataFeast71/COVID19_plots/main/img/Logo_W.jpeg {width=1in}
+  [![Analisis Y visualizacion][2]][1]
+  Energías renovables ¿Cuánto se produce y cuánto consume cada país?
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: null
+    df_print: paged
+    highlight: zenburn
+    theme: cerulean
+    toc: true
+    toc_float: true
+    toc_deep: 3
+---
+
+<style>
+.tocify-extend-page {
+  height: 0 !important;
+}
+</style>
+
+El tema de las energías renovables es algo que se ha discutido mucho en los últimos años, y más por el calentamiento global y la contaminación que produce la quema de combustibles fósiles para la obtención de energía. En este reporte presentamos cuánta energia de la que se produce en diferentes países proviene de fuentes renovables y de que tipo.
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center")
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(pheatmap)
+library(RColorBrewer)
+library(plotly)
+```
+
+## Data 
+
+Los datos se descargaron de la pagina [Our world in data](https://ourworldindata.org/renewable-energy#how-much-of-our-primary-energy-comes-from-renewables). En ella se encuentran los datos que se usaron para las representaciones gráficas.
+
+```{r}
+files <- list.files(path = "Data", pattern = ".csv$", full.names = TRUE)
+database <- lapply(files, function(x) {
+  df <- read.csv(x, header = TRUE, stringsAsFactors = FALSE) %>% 
+  select(-Code) %>% 
+  gather(key = "Energy", value = "Value_energy", -Entity, -Year)
+  df
+})
+database <- do.call(rbind, database)
+```
+
+¿Qué energías están presentes en la base de datos?
+
+```{r}
+correct_names <-  c("Biofuels.Production...PJ...Total" ="Biofuels",
+         "Electricity.from.hydro..TWh." ="HidroPower",
+         "Geothermal.Capacity" ="Geothermal",
+         "Renewables....sub.energy." = "RenewableEnergy",
+         "Renewables....electricity." = "RenewableElectricity",
+         "Electricity.from.solar..TWh." = "Solar",
+         "Electricity.from.wind..TWh." = "Wind") 
+data_energy <- database %>%
+  mutate(Energy = plyr::revalue(Energy, correct_names))
+```
+
+* *Renewable Energy*: Fuentes de energía renovables que incluye hidráulica, solar, eólica, biocombustibles y energía generada por el mar y marea. Está representado por el porcentaje de energía consumida que proviene de fuentes renovables.
+* *Renewable Electricity*:  % de la electricidad que proviene de energía renovable.
+* *Hidropower*: generación de la energía hidráulica medida en tera-watts por hora.
+* *Wind*: generación de electricidad por viento medida en tera-watts por hora.
+* *Solar*: generación de energía por sol medida en tera-watts por hora.
+* *Biofuels*: produccion de biocombustibles medida en tera-watts por hora. Incluye bioetanol y biodiesel.
+* *Geothermal*: Energía geotérmica medida en mega-watts.
+
+Primero analizaremos que pasa con las variables "*Renewable Energy*" y "*Renewable Electricity*", para después irnos al caso particular de cada tipo de energía renovable.
+
+## Porcentaje de energía renovable 
+
+Exploraremos el caso particular de México y otros países como EEUU, Brasil, España, China y Australia. Primero veamos cómo ha variado el porcentaje de energia primaria que proviene de fuentes renovables:
+
+```{r}
+data_renewable <- data_energy %>% 
+  filter(Energy %in% c("RenewableEnergy", "RenewableElectricity")) %>% 
+  spread(key = Energy, value = Value_energy)
+
+data_renew <- data_renewable %>% 
+  filter(Entity  %in% c("Mexico", "Brazil", "United States", "Spain", "China", "Norway"))
+```
+
+```{r}
+# write.csv(data_renewable, "Data_energy_electricity_world.csv", row.names = FALSE)
+```
+
+```{r}
+ggplot() +
+geom_line(filter(data_renew, Entity != "Mexico"), mapping = aes(x = Year, y = RenewableEnergy, group = Entity, color = Entity), alpha = 0.4) +
+geom_line(filter(data_renew, Entity == "Mexico"), mapping = aes(x = Year, y = RenewableEnergy, group = Entity, color = Entity), alpha = 1.0) +
+# geom_point(filter(data_renew, Entity == "Mexico"), mapping = aes(x = Year, y = RenewableEnergy, group = Entity, color = Entity), alpha = 1.0) +
+scale_x_continuous(name = "Año", limits = c(1968,2020), breaks = seq(1968,2020,4)) +
+scale_y_continuous(name = "", limits = c(0, 80), breaks = seq(0,80, 10), labels = function(x) paste0(x, "%")) +
+scale_color_manual(name = "", values = c("Mexico" = "#007146", 
+                                         "Norway" = "#ff002d",
+                              "China" = "#f8e100", 
+                              "Spain" = "#ffb700", 
+                              "Brazil" = "#00a636", "United States" = "#111268")) +
+# Theme
+theme_classic()
+```
+
+Como podemos observar en este gráfico, México nunca ha tenido un crecimiento o dependencia de las energías renovables, ya que representa menos del 10% de la energía que se usa en total y que ha sido constante.
+
+Ahora veamos cuanta energía eléctrica proviene de fuentes renovables:
+
+```{r}
+ggplot() +
+geom_line(filter(data_renew, Entity != "Mexico"), mapping = aes(x = Year, y = RenewableElectricity, group = Entity, color = Entity), alpha = 0.4) +
+geom_line(filter(data_renew, Entity == "Mexico"), mapping = aes(x = Year, y = RenewableElectricity, group = Entity, color = Entity), alpha = 1.0) +
+geom_point(filter(data_renew, Entity == "Mexico"), mapping = aes(x = Year, y = RenewableElectricity, group = Entity, color = Entity), alpha = 1.0) +
+scale_x_continuous(name = "Año", limits = c(1985,2020), breaks = seq(1985,2020,5)) +
+#scale_y_continuous(name = "", limits = c(0, 50), breaks = seq(0,50, 10), labels = function(x) paste0(x, "%")) +
+scale_color_manual(name = "", values = c("Mexico" = "#007146", 
+                                         "Norway" = "#ff002d",
+                              "China" = "#f8e100", 
+                              "Spain" = "#ffb700", 
+                              "Brazil" = "#00a636", "United States" = "#111268")) +
+# Theme
+theme_classic()
+```
+
+El total de la energía eléctrica renovable que se produce en México es de menor del 25%, y no ha variado mucho de los años anteriores. Esto quiere decir que más del 75% de la energía eléctrica que se produce proviene de otras fuentes no renovables.
+
+Es lamentable que desde hace bastantes años no se tuviera una iniciativa de innovar, incluir o invertir energías renovables, como es el caso de China en el cual, a partir del año 2012, ha estado aumentando su crecimiento en el porcentaje de la energía eléctrica renovable.
+
+Para ver un panorama global de que sucede con los demás países en el mundo, podemos aprovechar un gráfico de *heatmap* y ver el porcentaje de la energía eléctrica que proviene de fuentes renovables y su cambio a lo largo de los años. 
+
+A continuación, podemos observar el panorama de un mayor número de países seleccionados para su análisis:
+
+```{r}
+countries <- read.csv("Countries_population_selected.csv", header = TRUE, stringsAsFactors = FALSE)[,1]
+
+# Matrix
+data_matrix <- data_renewable %>% 
+  select(-RenewableEnergy) %>%
+  filter(Entity  %in% countries & Year >= 1985) %>% 
+  spread(key = Year, value = RenewableElectricity, fill = 0)
+
+df_mat <- round(as.matrix(data_matrix[, -1]))
+rownames(df_mat) <- data_matrix[, 1]
+
+#colors
+colors <- colorRampPalette(c("green", "black", "red"), space = "rgb")(100)
+colors_default <- colorRampPalette(rev(brewer.pal(n = 7, name = "GnBu")))(10) #100
+```
+
+```{r, fig.height=6, fig.width=8, fig.align="center"}
+pheatmap(mat= df_mat, main= "% de Energia electrica por fuentes renovables",
+         # Colors
+         color = rev(colors_default),
+         # border_color = NA,
+         # Clustering
+         cluster_rows = TRUE,
+         cluster_cols = FALSE, 
+         treeheight_row = 0, treeheight_col = 0,
+         # cutree_rows = 8, clustering_distance_rows = "correlation",
+         # annotations
+         # labels 
+         show_rownames = TRUE,
+         fontsize_row = 8, fontsize_col = 8
+        )
+```
+
+```{r}
+# Matrix
+data_matrix <- data_renewable %>% 
+  select(-RenewableElectricity) %>%
+  filter(Entity  %in% countries & Year >= 1960) %>% 
+  spread(key = Year, value = RenewableEnergy, fill = 0)
+
+df_mat <- round(as.matrix(data_matrix[, -1]))
+rownames(df_mat) <- data_matrix[, 1]
+```
+
+O gráficar el % de energía que proviene de fuentes renovables donde una gran mayoria de los países seleccionados es menor del 20%.
+
+```{r, fig.height=6, fig.width=8, fig.align="center"}
+pheatmap(mat= df_mat, main= "% de Energia renovable",
+         # Colors
+         color = rev(colors_default),
+         # border_color = NA,
+         # Clustering
+         cluster_rows = TRUE,
+         cluster_cols = FALSE, 
+         treeheight_row = 0, treeheight_col = 0,
+         # cutree_rows = 8, clustering_distance_rows = "correlation",
+         # annotations
+         # labels 
+         show_rownames = TRUE,
+         fontsize_row = 8, fontsize_col = 8
+        )
+```
+
+## Energías renovables: Producción
+
+En esta sección exploraremos los diferentes tipos de energías renovables y su producción, con excepción de la geotérmica ya que no se tienen datos de cuánta energía proporciona al año en cada país, por lo tanto, no se puede comparar con las demás fuentes.
+
+```{r}
+energy_types <- data_energy %>% 
+  filter(!(Energy %in% c("RenewableEnergy", "RenewableElectricity", "Geothermal")))
+```
+
+Seleccionamos algunos países para comparar como ha sido su crecimiento en Tera-Watts por hora producidos. Si bien sabemos que la comparación entre los países a veces no es equitativa debido a los múltiples factores que pueden influir en las políticas en cuanto al tema, podemos darnos una idea de los comportamientos que puede haber, en este caso para los países de Brasil, México, España, Estados Unidos, Noruega y China:
+
+```{r}
+energy_types_selected <- energy_types %>% 
+  filter(Entity %in% c("Mexico", "Brazil", "United States", "Spain", "China", "Norway"))
+
+ggplot() +
+  geom_line(filter(energy_types_selected, Entity != "Mexico"), 
+            mapping = aes(x = Year, y = Value_energy, color = Entity), alpha = 0.2) +
+  geom_line(filter(energy_types_selected, Entity == "Mexico"), 
+            mapping = aes(x = Year, y = Value_energy, color = Entity)) +
+  geom_point(filter(energy_types_selected, Entity != "Mexico"), 
+             mapping = aes(x = Year, y = Value_energy, color = Entity), size = 0.5, alpha = 0.2) +
+  geom_point(filter(energy_types_selected, Entity == "Mexico"), 
+             mapping = aes(x = Year, y = Value_energy, color = Entity), size = 0.5) +
+  # scale_y_continuous(name = "", limits = c(0, 80), breaks = seq(0,80, 10), labels = function(x) paste0(x, "%")) +
+  scale_color_manual(name = "", values = c("Mexico" = "#007146", 
+                                         "Norway" = "#ff002d",
+                              "China" = "#865f68", 
+                              "Spain" = "#ffb700", 
+                              "Brazil" = "#00a636", "United States" = "#111268")) +
+  labs(x = "", y = "terawatts-hora") +
+  facet_wrap(~Energy) +
+  theme_classic() +
+  theme(
+    legend.position = "top",
+    
+  )
+```
+
+Resulta interesante el caso de Noruega, ya que no se observa un crecimiento en las diferentes energías renovables, exceptuando la hidroeléctrica. En este casom no hay un cambio en la cantidad de energía generada por esta fuente en los distintos años, sin embargo, si vemos las gráficas de las secciones pasadas, la cantidad de terawatts producida es suficiente para cubrir su demanda, llegando casi al 100% de su producción de energía eléctrica. Noruega es un ejemplo de la dependencia de las energías renovables, pero es complicado su comparación con, por ejemplo, México, un país con una población mucho mayor en donde cubrir la demanda de la electricidad con solo un tipo de energía renovable puede ser muy complicado. Eso no quita el hecho de que en México no se ha avanzado o invertido en este tipo de infraestructuras.
+
+Podemos visualizar estos datos en otro tipo de gráfico, en este caso un gráfico de radar o *radar plot*. Por ejemplo, seleccionamos un solo año que es 2019 para comparar la producción de Terawatts de distintas fuentes de energías renovables (energía hidroeléctrica, generada por viento, biocombustibles y solar) y con este tipo de gráfico podemos observar cuál o cuáles son las energías renovables en las que más se han concentrado en un país determinado:
+
+```{r}
+energy_spider <- energy_types_selected %>% 
+  filter(Year == 2019) %>% 
+    spread(key = Energy, value = Value_energy) %>% 
+  select(-Year) %>% 
+  replace_na(list(Biofuels= 0))
+
+rownames(energy_spider) <- energy_spider$Entity
+energy_spider$Entity <- NULL
+```
+
+```{r, eval=FALSE}
+energy_types %>% 
+  spread(key = Energy, value = Value_energy, fill = "-") %>% 
+  write.csv(file = "Data_energy_countries.csv", row.names = FALSE)
+```
+
+Juntar muchos países en un solo gráfico de radar llega a ser complicado porque todo se empalma, por lo tanto, decidimos generar un gráfico por cada país con su propia escala. También, si quieres comparar entre diferentes países, puedes ver nuestra [app](https://datafeast71.shinyapps.io/Energy_Radar/) para explorar los países y año que sea de interés.
+
+```{r, message=FALSE, warning=FALSE}
+fig <- plot_ly(
+  type = "scatterpolar",
+   # mode = "lines+markers",
+  fill = "toself"
+)
+fig <- fig %>% 
+  add_trace(
+      r = as.numeric(energy_spider[1,]),
+      theta = c("Biofuels", "HidroPower", "Solar", "Wind"),
+      name = "Brazil"
+      # fillcolor='rgb(0,0,0)',opacity = 0.3,
+      # marker = list(color='rgb(0,0,0)'),
+      # line=list(color='rgb(255,255,255)',dash='dashed')
+  ) %>% 
+  add_trace(
+      r = as.numeric(energy_spider[2,]),
+      theta = c("Biofuels", "HidroPower", "Solar", "Wind"),
+      name = "Mexico", subplot = "polar2"
+  ) %>% 
+  add_trace(
+      r = as.numeric(energy_spider[3,]),
+      theta = c("Biofuels", "HidroPower", "Solar", "Wind"),
+      name = "United States", subplot = "polar3"
+  ) %>% 
+  add_trace(
+      r = as.numeric(energy_spider[4,]),
+      theta = c("Biofuels", "HidroPower", "Solar", "Wind"),
+      name = "Norway", subplot = "polar4"
+  )
+
+fig %>% 
+ layout(polar = list(
+                               domain = list(x = c(0,0.46), y = c(0.56,1))),
+                 polar2 = list(domain = list(x = c(0,0.46), y = c(0,0.44))),
+                 polar3 = list(domain = list(x = c(0.54,1), y = c(0.56,1))),
+                 polar4 = list(domain = list(x = c(0.54,1), y = c(0,0.44)))
+        )
+```

@@ -1,0 +1,8 @@
+# Don't track content of these folders
+.Rproj.user/
+
+
+# Compiled source #
+###################
+.Rhistory
+Energy.Rproj
